@@ -233,13 +233,11 @@ void
 log_write(struct buf *b)
 {
   int i;
-
   acquire(&log.lock);
   if (log.lh.n >= LOGBLOCKS)
     panic("too big a transaction");
   if (log.outstanding < 1)
     panic("log_write outside of trans");
-
   for (i = 0; i < log.lh.n; i++) {
     if (log.lh.block[i] == b->blockno)   // log absorption
       break;
@@ -249,8 +247,10 @@ log_write(struct buf *b)
     bpin(b);
     log.lh.n++;
   }
+  // if i < log.lh.n, block was absorbed (already in log)
   release(&log.lock);
 }
+
 
 // Print group commit statistics
 void
