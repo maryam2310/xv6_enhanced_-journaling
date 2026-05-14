@@ -6,6 +6,8 @@
 #include "sleeplock.h"
 #include "fs.h"
 #include "buf.h"
+#include "log.h"
+struct log_stats lstats;
 
 // Simple logging that allows concurrent FS system calls.
 //
@@ -32,6 +34,7 @@
 
 // Contents of the header block, used for both the on-disk header block
 // and to keep track in memory of logged block# before commit.
+
 struct logheader {
   int n;
   int block[LOGBLOCKS];
@@ -144,10 +147,12 @@ begin_op(void)
 
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
+
 void
 end_op(void)
 {
   int do_commit = 0;
+  int group_size = 0;
 
   acquire(&log.lock);
   log.outstanding -= 1;
@@ -156,6 +161,7 @@ end_op(void)
   if(log.outstanding == 0){
     do_commit = 1;
     log.committing = 1;
+    group_size = log.lh.n; // capture group size for statistics
   } else {
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
@@ -165,6 +171,11 @@ end_op(void)
   release(&log.lock);
 
   if(do_commit){
+    // update group commit statistics
+    lstats.total_commits++;
+    lstats.total_ops_grouped += group_size;
+    if(group_size > lstats.max_group_size)
+      lstats.max_group_size = group_size;
     // call commit w/o holding locks, since not allowed
     // to sleep with locks.
     commit();
@@ -174,6 +185,7 @@ end_op(void)
     release(&log.lock);
   }
 }
+
 
 // Copy modified blocks from cache to log.
 static void
@@ -202,6 +214,7 @@ commit()
     write_head();    // Erase the transaction from the log
   }
 }
+
 
 // Caller has modified b->data and is done with the buffer.
 // Record the block number and pin in the cache by increasing refcnt.
@@ -235,3 +248,18 @@ log_write(struct buf *b)
   release(&log.lock);
 }
 
+// Print group commit statistics
+void
+print_log_stats(void)
+{
+  acquire(&log.lock);
+  printf("=== Log Statistics ===\n");
+  printf("Total commits     : %d\n", lstats.total_commits);
+  printf("Total ops grouped : %d\n", lstats.total_ops_grouped);
+  printf("Max group size    : %d\n", lstats.max_group_size);
+  if(lstats.total_commits > 0)
+    printf("Avg group size    : %d\n",
+           lstats.total_ops_grouped / lstats.total_commits);
+  printf("======================\n");
+  release(&log.lock);
+}
