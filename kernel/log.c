@@ -161,12 +161,16 @@ end_op(void)
   if(log.outstanding == 0){
     do_commit = 1;
     log.committing = 1;
-    group_size = log.lh.n; // capture group size for statistics
+    group_size = log.lh.n;
   } else {
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
     // the amount of reserved space.
     wakeup(&log);
+    // wait for commit to finish if another is in progress
+    while(log.committing){
+      sleep(&log, &log.lock);
+    }
   }
   release(&log.lock);
 
