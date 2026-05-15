@@ -503,3 +503,13 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// sys_get_log_stats -- copy log statistics to userspace
+// Usage from user: get_log_stats(struct log_stats *buf)
+uint64
+sys_get_log_stats(void)
+{
+  uint64 uaddr;
+  argaddr(0, &uaddr);
+  return get_log_stats(uaddr);
+}
