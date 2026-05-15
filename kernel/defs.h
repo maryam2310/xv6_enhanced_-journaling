@@ -61,6 +61,7 @@ void            kfree(void *);
 void            kinit(void);
 
 // log.c
+struct log_stats;  // forward declaration (defined in log.h)
 void            initlog(int, struct superblock*);
 void            print_log_stats(void);
 void            get_log_stats(struct log_stats*);
