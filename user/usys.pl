@@ -42,3 +42,4 @@ entry("getpid");
 entry("sbrk");
 entry("pause");
 entry("uptime");
+entry("get_log_stats");
