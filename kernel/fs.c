@@ -267,6 +267,7 @@ iget(uint dev, uint inum)
   if(empty == 0)
     panic("iget: no inodes");
 
+
   ip = empty;
   ip->dev = dev;
   ip->inum = inum;
@@ -299,6 +300,7 @@ ilock(struct inode *ip)
   if(ip == 0 || ip->ref < 1)
     panic("ilock");
 
+
   acquiresleep(&ip->lock);
 
   if(ip->valid == 0){
@@ -314,6 +316,7 @@ ilock(struct inode *ip)
     ip->valid = 1;
     if(ip->type == 0)
       panic("ilock: no type");
+  return 0; // unreachable, satisfies compiler
   }
 }
 
@@ -323,6 +326,7 @@ iunlock(struct inode *ip)
 {
   if(ip == 0 || !holdingsleep(&ip->lock) || ip->ref < 1)
     panic("iunlock");
+
 
   releasesleep(&ip->lock);
 }
@@ -441,6 +445,7 @@ bmap(struct inode *ip, uint bn)
   }
 
   panic("bmap: out of range");
+  return 0; // unreachable, satisfies compiler
 }
 
 // Truncate inode (discard contents).
@@ -579,6 +584,7 @@ dirlookup(struct inode *dp, char *name, uint *poff)
 
   if(dp->type != T_DIR)
     panic("dirlookup not DIR");
+
 
   for(off = 0; off < dp->size; off += sizeof(de)){
     if(readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))

@@ -328,6 +328,7 @@ kexit(int status)
   if(p == initproc)
     panic("init exiting");
 
+
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){
@@ -360,6 +361,7 @@ kexit(int status)
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
+  return 0; // unreachable, satisfies compiler
 }
 
 // Wait for a child process to exit and return its pid.
@@ -481,6 +483,7 @@ sched(void)
   if(intr_get())
     panic("sched interruptible");
 
+
   intena = mycpu()->intena;
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
@@ -524,6 +527,7 @@ forkret(void)
     p->trapframe->a0 = kexec("/init", (char *[]){ "/init", 0 });
     if (p->trapframe->a0 == -1) {
       panic("exec");
+  return 0; // unreachable, satisfies compiler
     }
   }
 

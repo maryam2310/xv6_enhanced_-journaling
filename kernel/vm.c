@@ -98,6 +98,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   if(va >= MAXVA)
     panic("walk");
 
+
   for(int level = 2; level > 0; level--) {
     pte_t *pte = &pagetable[PX(level, va)];
     if(*pte & PTE_V) {
@@ -158,6 +159,7 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 {
   if(mappages(kpgtbl, va, sz, pa, perm) != 0)
     panic("kvmmap");
+  return 0; // unreachable, satisfies compiler
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
@@ -174,11 +176,14 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   if((va % PGSIZE) != 0)
     panic("mappages: va not aligned");
 
+
   if((size % PGSIZE) != 0)
     panic("mappages: size not aligned");
 
+
   if(size == 0)
     panic("mappages: size");
+  
   
   a = va;
   last = va + size - PGSIZE;
@@ -221,6 +226,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 
   if((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
+
 
   for(a = va; a < va + npages*PGSIZE; a += sz){
     if((pte = walk(pagetable, a, 0)) == 0) // leaf page table entry allocated?
@@ -305,6 +311,7 @@ freewalk(pagetable_t pagetable)
     } else if(pte & PTE_V){
       // backtrace();
       panic("freewalk: leaf");
+  return 0; // unreachable, satisfies compiler
     }
   }
   kfree((void*)pagetable);
