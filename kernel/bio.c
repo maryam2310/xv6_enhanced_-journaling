@@ -86,6 +86,7 @@ bget(uint dev, uint blockno)
     }
   }
   panic("bget: no buffers");
+  return 0; // unreachable, but satisfies compiler
 }
 
 // Return a locked buf with the contents of the indicated block.
@@ -149,5 +150,3 @@ bunpin(struct buf *b) {
   b->refcnt--;
   release(&bcache.lock);
 }
-
-

@@ -328,6 +328,7 @@ kexit(int status)
   if(p == initproc)
     panic("init exiting");
 
+
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){
@@ -480,6 +481,7 @@ sched(void)
     panic("sched RUNNING");
   if(intr_get())
     panic("sched interruptible");
+
 
   intena = mycpu()->intena;
   swtch(&p->context, &mycpu()->context);

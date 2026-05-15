@@ -42,6 +42,7 @@ usertrap(void)
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
+
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
   w_stvec((uint64)kernelvec);
@@ -144,6 +145,7 @@ kerneltrap()
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)
     panic("kerneltrap: interrupts enabled");
+
 
   if((which_dev = devintr()) == 0){
     // interrupt or trap from an unknown source

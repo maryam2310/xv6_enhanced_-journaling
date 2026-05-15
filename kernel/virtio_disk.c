@@ -103,6 +103,7 @@ virtio_disk_init(void)
   if(!(status & VIRTIO_CONFIG_S_FEATURES_OK))
     panic("virtio disk FEATURES_OK unset");
 
+
   // initialize queue 0.
   *R(VIRTIO_MMIO_QUEUE_SEL) = 0;
 
@@ -110,12 +111,14 @@ virtio_disk_init(void)
   if(*R(VIRTIO_MMIO_QUEUE_READY))
     panic("virtio disk should not be ready");
 
+
   // check maximum queue size.
   uint32 max = *R(VIRTIO_MMIO_QUEUE_NUM_MAX);
   if(max == 0)
     panic("virtio disk has no queue 0");
   if(max < NUM)
     panic("virtio disk max queue too short");
+
 
   // allocate and zero queue memory.
   disk.desc = kalloc();
@@ -315,6 +318,7 @@ virtio_disk_intr()
 
     if(disk.info[id].status != 0)
       panic("virtio_disk_intr status");
+
 
     struct buf *b = disk.info[id].b;
     b->disk = 0;   // disk is done with buf

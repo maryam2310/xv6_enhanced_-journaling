@@ -7,6 +7,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "log.h"
+
 struct log_stats lstats;
 
 // Simple logging that allows concurrent FS system calls.
@@ -26,18 +27,39 @@ struct log_stats lstats;
 // The log is a physical re-do log containing disk blocks.
 // The on-disk log format:
 //   header block, containing block #s for block A, B, C, ...
+//                 and checksums[A, B, C, ...]
 //   block A
 //   block B
 //   block C
 //   ...
 // Log appends are synchronous.
+//
+// enhancement: each logged block has a 32-bit checksum
+// stored in the header. During recovery, blocks whose checksum
+// does not match are skipped, preventing corrupted partial writes
+// from being installed into the filesystem.
 
-// Contents of the header block, used for both the on-disk header block
-// and to keep track in memory of logged block# before commit.
+// ------------------------------------------------------------------
+// Checksum: a simple djb2-style hash over a 1024-byte block.
+// Fast, dependency-free, and good enough for a teaching OS.
+// ------------------------------------------------------------------
+static uint
+block_checksum(uchar *data, int len)
+{
+  uint hash = 5381;
+  for (int i = 0; i < len; i++)
+    hash = ((hash << 5) + hash) + data[i]; // hash * 33 + byte
+  return hash;
+}
 
+// ------------------------------------------------------------------
+// On-disk / in-memory log header.
+// The 'checksum' array addition.
+// ------------------------------------------------------------------
 struct logheader {
   int n;
   int block[LOGBLOCKS];
+  uint checksum[LOGBLOCKS];  // one checksum per logged block
 };
 
 struct log {
@@ -51,7 +73,7 @@ struct log {
 struct log log;
 
 static void recover_from_log(void);
-static void commit();
+static void commit(void);
 
 void
 initlog(int dev, struct superblock *sb)
@@ -65,21 +87,45 @@ initlog(int dev, struct superblock *sb)
   recover_from_log();
 }
 
-// Copy committed blocks from log to their home location
+// ------------------------------------------------------------------
+// install_trans: copy committed blocks from log to their home location.
+// verify each block's checksum before installing.
+// If the checksum doesn't match, the block was partially written
+// (e.g., power failure mid-write) — skip it and count the error.
+// ------------------------------------------------------------------
 static void
 install_trans(int recovering)
 {
   int tail;
 
   for (tail = 0; tail < log.lh.n; tail++) {
-    if(recovering) {
-      printf("recovering tail %d dst %d\n", tail, log.lh.block[tail]);
-    }
     struct buf *lbuf = bread(log.dev, log.start+tail+1); // read log block
     struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst
-    memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
-    bwrite(dbuf);  // write dst to disk
-    if(recovering == 0)
+
+    // verify checksum of the log block before installing
+    uint computed = block_checksum(lbuf->data, BSIZE);
+    if (computed != log.lh.checksum[tail]) {
+      // Checksum mismatch: this log block is corrupted or partially written.
+      // Do NOT install it — leave the home block untouched.
+      lstats.checksum_errors++;
+      if (recovering) {
+        printf("log: checksum MISMATCH at log block %d (dst %d) — skipping\n",
+               tail, log.lh.block[tail]);
+      }
+      brelse(lbuf);
+      brelse(dbuf);
+      continue; // skip this block
+    }
+
+    // Checksum OK: safe to install.
+    if (recovering) {
+      printf("log: recovering tail %d dst %d (checksum OK)\n",
+             tail, log.lh.block[tail]);
+    }
+    lstats.recovered_blocks++;
+    memmove(dbuf->data, lbuf->data, BSIZE);
+    bwrite(dbuf);
+    if (recovering == 0)
       bunpin(dbuf);
     brelse(lbuf);
     brelse(dbuf);
@@ -96,13 +142,15 @@ read_head(void)
   log.lh.n = lh->n;
   for (i = 0; i < log.lh.n; i++) {
     log.lh.block[i] = lh->block[i];
+    log.lh.checksum[i] = lh->checksum[i]; // read checksums too
   }
   brelse(buf);
 }
 
 // Write in-memory log header to disk.
-// This is the true point at which the
-// current transaction commits.
+// This is the true point at which the current transaction commits.
+// checksums are already in lh.checksum[] (set by write_log),
+// so they are persisted here alongside block numbers.
 static void
 write_head(void)
 {
@@ -112,6 +160,7 @@ write_head(void)
   hb->n = log.lh.n;
   for (i = 0; i < log.lh.n; i++) {
     hb->block[i] = log.lh.block[i];
+    hb->checksum[i] = log.lh.checksum[i]; // persist checksum
   }
   bwrite(buf);
   brelse(buf);
@@ -121,7 +170,7 @@ static void
 recover_from_log(void)
 {
   read_head();
-  install_trans(1); // if committed, copy from log to disk
+  install_trans(1); // if committed, copy from log to disk (with checksum check)
   log.lh.n = 0;
   write_head(); // clear the log
 }
@@ -147,7 +196,6 @@ begin_op(void)
 
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
-
 void
 end_op(void)
 {
@@ -190,35 +238,39 @@ end_op(void)
   }
 }
 
-
 // Copy modified blocks from cache to log.
+// compute and store a checksum for each block written.
 static void
 write_log(void)
 {
   int tail;
 
   for (tail = 0; tail < log.lh.n; tail++) {
-    struct buf *to = bread(log.dev, log.start+tail+1); // log block
+    struct buf *to   = bread(log.dev, log.start+tail+1); // log block
     struct buf *from = bread(log.dev, log.lh.block[tail]); // cache block
     memmove(to->data, from->data, BSIZE);
-    bwrite(to);  // write the log
+
+    // compute checksum of the data BEFORE writing to disk.
+    // This is stored in the in-memory header; write_head() persists it.
+    log.lh.checksum[tail] = block_checksum(to->data, BSIZE);
+
+    bwrite(to);  // write the log block
     brelse(from);
     brelse(to);
   }
 }
 
 static void
-commit()
+commit(void)
 {
   if (log.lh.n > 0) {
-    write_log();     // Write modified blocks from cache to log
-    write_head();    // Write header to disk -- the real commit
-    install_trans(0); // Now install writes to home locations
+    write_log();     // Write modified blocks from cache to log (+ checksums)
+    write_head();    // Write header to disk -- the real commit (includes checksums)
+    install_trans(0); // Now install writes to home locations (with checksum verify)
     log.lh.n = 0;
     write_head();    // Erase the transaction from the log
   }
 }
-
 
 // Caller has modified b->data and is done with the buffer.
 // Record the block number and pin in the cache by increasing refcnt.
@@ -251,8 +303,20 @@ log_write(struct buf *b)
   release(&log.lock);
 }
 
+// ------------------------------------------------------------------
+// get_log_stats: fill caller-provided buffer with current log stats.
+// the copyout to userspace is done in sysfile.c (sys_get_log_stats)
+// because proc.h / pagetable access lives there, not in log.c.
+// ------------------------------------------------------------------
+void
+get_log_stats(struct log_stats *dst)
+{
+  acquire(&log.lock);
+  *dst = lstats;
+  release(&log.lock);
+}
 
-// Print group commit statistics
+// Print group commit + integrity statistics to the console
 void
 print_log_stats(void)
 {
@@ -264,6 +328,9 @@ print_log_stats(void)
   if(lstats.total_commits > 0)
     printf("Avg group size    : %d\n",
            lstats.total_ops_grouped / lstats.total_commits);
+  printf("--- Integrity ---\n");
+  printf("Checksum errors   : %d\n", lstats.checksum_errors);
+  printf("Recovered blocks  : %d\n", lstats.recovered_blocks);
   printf("======================\n");
   release(&log.lock);
 }

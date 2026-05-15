@@ -124,6 +124,7 @@ fileread(struct file *f, uint64 addr, int n)
     iunlock(f->ip);
   } else {
     panic("fileread");
+  return 0; // unreachable, satisfies compiler
   }
 
   return r;
@@ -173,6 +174,7 @@ filewrite(struct file *f, uint64 addr, int n)
     ret = (i == n ? n : -1);
   } else {
     panic("filewrite");
+  return 0; // unreachable, satisfies compiler
   }
 
   return ret;
