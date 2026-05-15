@@ -34,7 +34,7 @@ struct log_stats lstats;
 //   ...
 // Log appends are synchronous.
 //
-// Enhancement: each logged block has a 32-bit checksum
+// enhancement: each logged block has a 32-bit checksum
 // stored in the header. During recovery, blocks whose checksum
 // does not match are skipped, preventing corrupted partial writes
 // from being installed into the filesystem.
@@ -142,14 +142,14 @@ read_head(void)
   log.lh.n = lh->n;
   for (i = 0; i < log.lh.n; i++) {
     log.lh.block[i] = lh->block[i];
-    log.lh.checksum[i] = lh->checksum[i]; // Read checksums too
+    log.lh.checksum[i] = lh->checksum[i]; // read checksums too
   }
   brelse(buf);
 }
 
 // Write in-memory log header to disk.
 // This is the true point at which the current transaction commits.
-// Checksums are already in lh.checksum[] (set by write_log),
+// checksums are already in lh.checksum[] (set by write_log),
 // so they are persisted here alongside block numbers.
 static void
 write_head(void)
@@ -160,7 +160,7 @@ write_head(void)
   hb->n = log.lh.n;
   for (i = 0; i < log.lh.n; i++) {
     hb->block[i] = log.lh.block[i];
-    hb->checksum[i] = log.lh.checksum[i]; // Persist checksum
+    hb->checksum[i] = log.lh.checksum[i]; // persist checksum
   }
   bwrite(buf);
   brelse(buf);
@@ -223,7 +223,7 @@ end_op(void)
   release(&log.lock);
 
   if(do_commit){
-    // update group commit statistics 
+    // update group commit statistics
     lstats.total_commits++;
     lstats.total_ops_grouped += group_size;
     if(group_size > lstats.max_group_size)
@@ -239,7 +239,7 @@ end_op(void)
 }
 
 // Copy modified blocks from cache to log.
-// Compute and store a checksum for each block written.
+// compute and store a checksum for each block written.
 static void
 write_log(void)
 {
@@ -250,7 +250,7 @@ write_log(void)
     struct buf *from = bread(log.dev, log.lh.block[tail]); // cache block
     memmove(to->data, from->data, BSIZE);
 
-    // Compute checksum of the data BEFORE writing to disk.
+    // compute checksum of the data BEFORE writing to disk.
     // This is stored in the in-memory header; write_head() persists it.
     log.lh.checksum[tail] = block_checksum(to->data, BSIZE);
 
@@ -304,18 +304,16 @@ log_write(struct buf *b)
 }
 
 // ------------------------------------------------------------------
-// get_log_stats: copy the log_stats struct to a user-provided pointer.
-// This is the kernel side of the new sys_get_log_stats syscall.
-// Returns 0 on success, -1 on bad pointer.
+// get_log_stats: fill caller-provided buffer with current log stats.
+// the copyout to userspace is done in sysfile.c (sys_get_log_stats)
+// because proc.h / pagetable access lives there, not in log.c.
 // ------------------------------------------------------------------
-int
-get_log_stats(uint64 uaddr)
+void
+get_log_stats(struct log_stats *dst)
 {
-  // copyout: kernel -> userspace
-  struct proc *p = myproc();
-  if (copyout(p->pagetable, uaddr, (char *)&lstats, sizeof(lstats)) < 0)
-    return -1;
-  return 0;
+  acquire(&log.lock);
+  *dst = lstats;
+  release(&log.lock);
 }
 
 // Print group commit + integrity statistics to the console

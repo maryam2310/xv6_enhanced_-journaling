@@ -63,7 +63,7 @@ void            kinit(void);
 // log.c
 void            initlog(int, struct superblock*);
 void            print_log_stats(void);
-int             get_log_stats(uint64);
+void            get_log_stats(struct log_stats*);
 void            begin_op(void);
 void            end_op(void);
 void            log_write(struct buf*);
@@ -75,8 +75,8 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-int             printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
-void            panic(char*) __attribute__((noreturn));
+int             printf(char*, ...);
+void            panic(char*);
 void            printfinit(void);
 
 // proc.c
@@ -93,7 +93,7 @@ void            setkilled(struct proc*);
 struct cpu*     mycpu(void);
 struct proc*    myproc();
 void            procinit(void);
-void            scheduler(void) __attribute__((noreturn));
+void            scheduler(void);
 void            sched(void);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);

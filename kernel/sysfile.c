@@ -13,6 +13,7 @@
 #include "proc.h"
 #include "fs.h"
 #include "sleeplock.h"
+#include "log.h"
 #include "file.h"
 #include "fcntl.h"
 
@@ -505,11 +506,15 @@ sys_pipe(void)
 }
 
 // sys_get_log_stats -- copy log statistics to userspace
-// Usage from user: get_log_stats(struct log_stats *buf)
+// get_log_stats(log.c) fills a kernel-side struct; we copyout to user.
 uint64
 sys_get_log_stats(void)
 {
   uint64 uaddr;
+  struct log_stats kstats;
   argaddr(0, &uaddr);
-  return get_log_stats(uaddr);
+  get_log_stats(&kstats);
+  if (copyout(myproc()->pagetable, uaddr, (char *)&kstats, sizeof(kstats)) < 0)
+    return -1;
+  return 0;
 }
