@@ -2,6 +2,15 @@
 
 struct stat;
 
+// log statistics struct (mirrors kernel/log.h)
+struct log_stats {
+  int total_commits;
+  int total_ops_grouped;
+  int max_group_size;
+  int checksum_errors;
+  int recovered_blocks;
+};
+
 // system calls
 int fork(void);
 int exit(int) __attribute__((noreturn));
@@ -24,6 +33,7 @@ int getpid(void);
 char* sys_sbrk(int,int);
 int pause(int);
 int uptime(void);
+int get_log_stats(struct log_stats *);
 
 // ulib.c
 int stat(const char*, struct stat*);
