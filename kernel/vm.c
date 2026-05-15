@@ -159,7 +159,6 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 {
   if(mappages(kpgtbl, va, sz, pa, perm) != 0)
     panic("kvmmap");
-  return 0; // unreachable, satisfies compiler
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
@@ -311,7 +310,6 @@ freewalk(pagetable_t pagetable)
     } else if(pte & PTE_V){
       // backtrace();
       panic("freewalk: leaf");
-  return 0; // unreachable, satisfies compiler
     }
   }
   kfree((void*)pagetable);

@@ -316,7 +316,6 @@ ilock(struct inode *ip)
     ip->valid = 1;
     if(ip->type == 0)
       panic("ilock: no type");
-  return 0; // unreachable, satisfies compiler
   }
 }
 

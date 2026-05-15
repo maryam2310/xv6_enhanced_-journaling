@@ -151,7 +151,6 @@ kerneltrap()
     // interrupt or trap from an unknown source
     printf("scause=0x%lx sepc=0x%lx stval=0x%lx\n", scause, r_sepc(), r_stval());
     panic("kerneltrap");
-  return 0; // unreachable, satisfies compiler
   }
 
   // give up the CPU if this is a timer interrupt.
@@ -219,3 +218,4 @@ devintr()
     return 0;
   }
 }
+

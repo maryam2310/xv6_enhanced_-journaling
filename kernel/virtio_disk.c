@@ -70,7 +70,6 @@ virtio_disk_init(void)
      *R(VIRTIO_MMIO_DEVICE_ID) != 2 ||
      *R(VIRTIO_MMIO_VENDOR_ID) != 0x554d4551){
     panic("could not find virtio disk");
-  return 0; // unreachable, satisfies compiler
   }
   
   // reset device
