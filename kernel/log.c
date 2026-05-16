@@ -7,6 +7,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "log.h"
+#include "crash_inject.h"   // fault-injection macros (no-ops in normal builds)
 
 struct log_stats lstats;
 
@@ -125,6 +126,11 @@ install_trans(int recovering)
     lstats.recovered_blocks++;
     memmove(dbuf->data, lbuf->data, BSIZE);
     bwrite(dbuf);
+
+    if (tail == 0)
+      INJECT_DURING_INSTALL(); // Person 4 — Scenario C: panic after first block installed
+                               // no-op unless CRASH_DURING_INSTALL is defined
+
     if (recovering == 0)
       bunpin(dbuf);
     brelse(lbuf);
@@ -223,6 +229,9 @@ end_op(void)
   release(&log.lock);
 
   if(do_commit){
+    INJECT_DURING_GROUP();     // Person 4 — Scenario D: panic before group commit fires
+                               // no-op unless CRASH_DURING_GROUP is defined
+
     // update group commit statistics
     lstats.total_commits++;
     lstats.total_ops_grouped += group_size;
@@ -264,11 +273,19 @@ static void
 commit(void)
 {
   if (log.lh.n > 0) {
-    write_log();     // Write modified blocks from cache to log (+ checksums)
-    write_head();    // Write header to disk -- the real commit (includes checksums)
-    install_trans(0); // Now install writes to home locations (with checksum verify)
+    write_log();             // copy dirty bufs to log area on disk (+ checksums)
+
+    INJECT_BEFORE_COMMIT();  // Person 4 — Scenario A: panic before commit block written
+                             // no-op unless CRASH_BEFORE_COMMIT is defined
+
+    write_head();            // write header to disk -- the real commit point
+
+    INJECT_AFTER_COMMIT();   // Person 4 — Scenario B: panic after commit, before install
+                             // no-op unless CRASH_AFTER_COMMIT is defined
+
+    install_trans(0);        // install to home blocks (checksum-verified)
     log.lh.n = 0;
-    write_head();    // Erase the transaction from the log
+    write_head();            // erase the transaction from the log
   }
 }
 
